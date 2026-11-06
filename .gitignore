@@ -1,0 +1,5 @@
+# Skill-creator eval workspaces
+*-workspace/
+
+# macOS
+.DS_Store
