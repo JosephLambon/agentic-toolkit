@@ -5,7 +5,7 @@ description: Use for a final multi-agent pass on an existing GitHub PR just befo
 
 # Pre-merge swarm review
 
-**Goal:** the last adversarial pass on a PR that's nearly ready to merge. Four reviewers (feature, bugs, performance, security), each in its own fresh context, attack it from one angle at runtime and write a report, which you post on the PR. Every finding has a WHAT, a WHY and a CONFIDENCE level. Fresh contexts are the point: yours is full of reasons the code is fine.
+**Goal:** the last adversarial pass on a PR that's nearly ready to merge. Four reviewers (feature, bugs, performance, security), each in its own fresh context, attack it from one angle at runtime and write a report, which you post on the PR. Every finding has a WHAT, a WHY, a CONFIDENCE level and proof: a screenshot or video where there's something to see, otherwise raw output or numbers. Fresh contexts are the point: yours is full of reasons the code is fine.
 
 **Never merge, approve or enable auto-merge,** and reviewers never edit, commit or push. Merging is the user's call.
 
@@ -19,18 +19,24 @@ The order matters: everyone reviews the same pinned commit, and security runs on
    ```bash
    python3 <skill dir>/scripts/prepare.py <PR url> --out <out>
    ```
-   Pass the URL (or a number plus `--repo <owner/repo>`): in a fork's clone, a bare number can resolve to the fork's own PR. The script checks the PR is open, fetches its head, and creates detached worktrees `wt-feature`, `wt-bugs`, `wt-performance` and `wt-security` at the head, and `wt-base` at the merge base. One worktree each, because agents installing, building and serving in one folder break each other's runs. It prints JSON with the SHAs, paths, `visibility`, `push` and `warnings`. If `warnings` isn't empty, show them and ask the user before continuing. A fork PR is the serious one: the reviewers will run a stranger's install scripts and tests on this machine, with the user's credentials.
+   Pass the URL (or a number plus `--repo <owner/repo>`): in a fork's clone, a bare number can resolve to the fork's own PR. The script checks the PR is open, fetches its head, and creates detached worktrees `wt-feature`, `wt-bugs`, `wt-performance` and `wt-security` at the head, and `wt-base` at the merge base. One worktree each, because agents installing, building and serving in one folder break each other's runs. It prints JSON with the SHAs, paths, `visibility`, `push`, `evidence` and `warnings`. `evidence` is the `evidenced-pull-request` skill's folder, whose scripts the reviewers use for screenshots and you use to post; if it's null (that skill or Node is missing), reviewers fall back to Playwright or headless Chrome, and you post with plain gh. If `warnings` isn't empty, show them and ask the user before continuing. A fork PR is the serious one: the reviewers will run a stranger's install scripts and tests on this machine, with the user's credentials.
 
-2. **Launch feature, bugs and performance together.** In one message, spawn three `general-purpose` agents with the prompt below. Don't use `fork`, which inherits this context. Ports: feature 4100–4109, bugs 4110–4119, performance 4120–4139 (it runs head and base). When all three have finished, read the *Report* section of `<skill dir>/references/briefing.md`, then their reports. If one is malformed, or has a verdict its findings contradict (for example *Ready* with a blocker), ask that agent to correct it with SendMessage. Spawn a replacement only if the agent died or wrote no report. If that fails too, its pass didn't complete: say so in a short PR comment in step 4.
+2. **Launch feature, bugs and performance together.** In one message, spawn three `general-purpose` agents with the prompt below. Don't use `fork`, which inherits this context. Ports: feature 4100–4109, bugs 4110–4119, performance 4120–4139 (it runs head and base). When all three have finished, read the *Proof* and *Report* sections of `<skill dir>/references/briefing.md`, then their reports. If one is malformed, has a finding without proof, references files that are missing or too big (`node <evidence>/scripts/attachments.mjs <out>/reports/<role>.md` lists them), or has a verdict its findings contradict (for example *Ready* with a blocker), ask that agent to correct it with SendMessage. Spawn a replacement only if the agent died or wrote no report. If that fails too, its pass didn't complete: say so in a short PR comment in step 4.
 
 3. **Then security.** Spawn one more `general-purpose` agent with role `security` and ports 4140–4149. It goes last so it can treat the others' crashes, odd states and slow paths as leads for attack vectors. Check its report the same way.
 
 4. **Check, then post.**
    - Re-check `gh pr view <PR url> --json headRefOid`. If the head moved, ask the user whether to post the reports as they are (each names the SHA it reviewed) or re-run on the new head.
-   - Remove any secrets, tokens, personal data, environment values, local absolute paths and usernames copied from logs. Notification emails send the full text straight away, so nothing posted can be withdrawn.
-   - **If `visibility` isn't `PRIVATE` and any report describes an exploitable vulnerability** (usually security's, but a bug catcher's crash can be a denial of service), ask the user before posting it. Offer a redacted comment (counts and severities only), with the details in chat and a draft advisory from the repo's *Security* tab. A public comment hands an unpatched exploit to everyone.
+   - Run `python3 <skill dir>/scripts/prepare.py --scan --out <out>`. It lists every line in the reports and the `.log` files behind log images that holds a local path, the username or a token. Fix each one (re-render any `.log` you change). It can't see personal data it has no pattern for, or anything inside images, so skim the reports for those; the reviewers have checked their screenshots. Notification emails send the full text straight away and uploads can't be deleted, so nothing posted can be withdrawn.
+   - **If `visibility` isn't `PRIVATE` and any report describes an exploitable vulnerability** (usually security's, but a bug catcher's crash can be a denial of service), ask the user before posting it. Offer a redacted comment (counts and severities only, no evidence files), with the details in chat and a draft advisory from the repo's *Security* tab. A public comment hands an unpatched exploit to everyone.
    - Check each report's tables: a `|` or line break inside a cell breaks the table on GitHub.
-   - Post each report as its own comment, in the order feature, bugs, performance, security: `gh pr comment <PR url> --body-file <out>/reports/<role>.md`. Don't soften or drop findings. The reports' independence is the point, and validation comes next.
+   - Post each report as its own comment, in the order feature, bugs, performance, security:
+     ```bash
+     node <evidence>/scripts/attachments.mjs <out>/reports/<role>.md -- \
+       gh pr comment <PR url> --body-file <out>/reports/<role>.md
+     ```
+     It attaches every file the report references, refuses to run if a file or the gh version is wrong, then reads the comment back to check every file landed. Follow its messages when it fails. With `evidence` null, run the `gh pr comment` with one `--attach <file>` per referenced file (gh 2.103.0 or later), then check the comment with `gh pr view <PR url> --comments`.
+   - Don't soften or drop findings. The reports' independence is the point, and validation comes next.
 
 5. **Validate, then offer fixes.**
    - Reproduce every blocker and major, and any minor that's cheap to check, because reviewers over-flag. Mark each one *confirmed*, *rejected* (with the reason) or *unverified*.
@@ -46,12 +52,13 @@ The order matters: everyone reviews the same pinned commit, and security runs on
 
 ## Agent prompt
 
-Each agent reads `references/briefing.md` (shared rules and the report format) and its role brief: `references/feature.md`, `references/bugs.md`, `references/performance.md` or `references/security.md`. Apart from the *Report* section (step 2), you don't need to read them. Fill in the angle brackets and drop the lines for other roles.
+Each agent reads `references/briefing.md` (shared rules and the report format) and its role brief: `references/feature.md`, `references/bugs.md`, `references/performance.md` or `references/security.md`. Apart from the *Proof* and *Report* sections (step 2), you don't need to read them. Fill in the angle brackets and drop the lines for other roles.
 
 ```
 You are the <role> reviewer in a pre-merge swarm review of PR #<n> in <owner/repo>, <PR url>. You didn't write this code: assume it has problems and find them.
 Read <skill dir>/references/briefing.md, then <skill dir>/references/<role>.md, and follow both.
 PR head <head sha>; base <base branch>, merge base <merge base sha>. Your code: <out>/wt-<role>, detached at the head. Your ports: <range>.
+Evidence folder: <out>/reports/<role>/. Evidence tools: <evidence, or none>.
 Performance only: the baseline is <out>/wt-base.
 Security only: the other reviewers' reports, as leads to verify rather than conclusions: <out>/reports/feature.md, bugs.md and performance.md.
 Write your report to <out>/reports/<role>.md. Reply with only its verdict line.

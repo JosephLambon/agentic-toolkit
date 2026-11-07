@@ -180,11 +180,13 @@ printf '%s|' "$@" >> "$FAKE_GH_LOG"; echo >> "$FAKE_GH_LOG"
 case "$1" in
   --version) echo "gh version ${FAKE_GH_VERSION:-2.103.3} (2026-10-26)" ;;
   pr) case "$2" in
-        create|edit)
+        create|edit|comment)
           if [ -n "$FAKE_GH_FAIL" ]; then printf '%s' "$FAKE_GH_FAIL_OUT"; echo "could not upload" >&2; exit 1; fi
-          echo "https://github.com/o/r/pull/7" ;;
+          if [ "$2" = comment ]; then printf '%s\n' "${FAKE_GH_COMMENT_OUT-https://github.com/o/r/pull/7#issuecomment-42}"
+          else echo "https://github.com/o/r/pull/7"; fi ;;
         view) cat "$FAKE_GH_BODY" ;;
       esac ;;
+  api) if [ -n "$FAKE_GH_API_FAIL" ]; then echo "HTTP 404" >&2; exit 1; fi; cat "$FAKE_GH_BODY" ;;
 esac
 """
 
@@ -238,6 +240,62 @@ class AttachmentsTest(unittest.TestCase):
         result = self.run_attach("![a](./shots/a.png)\n", "pr", "create")
         self.assertEqual(result.returncode, 1)
         self.assertIn("./shots/a.png", result.stderr)
+
+    def test_comment_is_checked_by_reading_the_new_comment_back(self):
+        write_png(self.dir / "shots/a.png", gradient())
+        result = self.run_attach("![a](./shots/a.png)\n", "pr", "comment", "https://github.com/o/r/pull/7",
+                                 "--body-file", str(self.dir / "body.md"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("api|--hostname|github.com|repos/o/r/issues/comments/42|--jq|.body|", self.gh_calls())
+        self.assertFalse(any(c.startswith("pr|view|") for c in self.gh_calls()))
+        self.assertIn("no local references left in https://github.com/o/r/pull/7#issuecomment-42", result.stdout)
+
+    def test_local_reference_left_in_the_comment_fails(self):
+        write_png(self.dir / "shots/a.png", gradient())
+        self.live_body.write_text("![a](./shots/a.png)\n")
+        result = self.run_attach("![a](./shots/a.png)\n", "pr", "comment", "https://github.com/o/r/pull/7")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("still local paths in https://github.com/o/r/pull/7#issuecomment-42", result.stderr)
+
+    def test_failed_comment_upload_warns_about_a_partial_comment(self):
+        write_png(self.dir / "shots/a.png", gradient())
+        result = self.run_attach("![a](./shots/a.png)\n", "pr", "comment", "https://github.com/o/r/pull/7",
+                                 FAKE_GH_FAIL="1", FAKE_GH_FAIL_OUT="")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("gh pr view https://github.com/o/r/pull/7 --comments", result.stderr)
+        self.assertNotIn("gh pr edit", result.stderr)
+
+    def test_unreadable_comment_gives_the_edit_last_recovery(self):
+        write_png(self.dir / "shots/a.png", gradient())
+        result = self.run_attach("![a](./shots/a.png)\n", "pr", "comment", "https://github.com/o/r/pull/7",
+                                 FAKE_GH_API_FAIL="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("comment is posted", result.stderr)
+        self.assertIn("gh pr comment https://github.com/o/r/pull/7 --edit-last --body-file", result.stderr)
+
+    def test_comment_without_url_output_gives_the_edit_last_recovery(self):
+        write_png(self.dir / "shots/a.png", gradient())
+        result = self.run_attach("![a](./shots/a.png)\n", "pr", "comment", "https://github.com/o/r/pull/7",
+                                 FAKE_GH_COMMENT_OUT="")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("printed no comment URL", result.stderr)
+        self.assertIn("--edit-last", result.stderr)
+
+    def test_alt_text_with_brackets_is_still_found(self):
+        write_png(self.dir / "shots/a.png", gradient())
+        result = self.run_attach("![B2: name shows [object Object]](./shots/a.png)\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.split("\n")[0], str(self.dir / "shots/a.png"))
+
+    def test_local_src_in_html_media_tags_fails(self):
+        write_png(self.dir / "shots/a.png", gradient())
+        result = self.run_attach('<img src="./shots/a.png" width=375>\n<video src=shots/a.webm>\n'
+                                 '<img src="https://example.com/x.png">\n`<img src="./in-code.png">`\n')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("./shots/a.png: a local src in an HTML tag", result.stderr)
+        self.assertIn("shots/a.webm: a local src in an HTML tag", result.stderr)
+        self.assertNotIn("example.com", result.stderr)
+        self.assertNotIn("in-code", result.stderr)
 
     def test_old_gh_runs_nothing(self):
         write_png(self.dir / "shots/a.png", gradient())

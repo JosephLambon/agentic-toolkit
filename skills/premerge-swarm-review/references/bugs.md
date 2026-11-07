@@ -8,4 +8,4 @@ Start with the code paths in the diff that no test exercises. Then work through 
 - **Environment:** slow or failing network, a dependency that errors or times out, permission denied, missing environment variables, other time zones and locales (including daylight-saving changes and leap days), very small and very large screens, keyboard only, reduced motion.
 - **Integration:** old data or old clients against the new code, migrations up and down, feature flags on and off.
 
-For each bug, give the smallest set of repro steps and the expected and actual results. Where it's cheap, prove it with a throwaway failing test.
+For each bug, give the smallest set of repro steps, the expected and actual results, and proof of the actual result: a screenshot or short video of the broken state, or a log image of the error. Where it's cheap, a throwaway failing test makes the best log.

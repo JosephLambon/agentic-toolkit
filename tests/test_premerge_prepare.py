@@ -27,7 +27,9 @@ FAKE_GH = textwrap.dedent("""\
     args = sys.argv[1:]
     with open(os.environ["FAKE_GH_LOG"], "a") as log:
         log.write(" ".join(args) + "\\n")
-    if args[:2] == ["pr", "view"]:
+    if args == ["--version"]:
+        print("gh version " + os.environ.get("FAKE_GH_VERSION", "2.103.3") + " (2026-10-26)")
+    elif args[:2] == ["pr", "view"]:
         print(open(os.environ["FAKE_PR_JSON"]).read())
     elif args[:2] == ["repo", "view"]:
         print('{"visibility": "PUBLIC"}')
@@ -112,7 +114,12 @@ class PrepareTest(unittest.TestCase):
             self.assertEqual(git("rev-parse", "HEAD", cwd=tree), self.head_sha)
             self.assertEqual((Path(tree) / "app.txt").read_text(), "v2\n")
         self.assertEqual(git("rev-parse", "HEAD", cwd=data["worktrees"]["base"]), self.base_sha)
-        self.assertTrue(Path(data["reports"]).is_dir())
+        for role in ("feature", "bugs", "performance", "security"):
+            self.assertTrue((Path(data["reports"]) / role).is_dir())
+        if shutil.which("node", path=self.env["PATH"]):
+            self.assertTrue(data["evidence"].endswith("skills/evidenced-pull-request"))
+        else:
+            self.assertIsNone(data["evidence"])
 
     def test_behind_base_warns_and_baseline_stays_at_merge_base(self):
         git("checkout", "--quiet", "main", cwd=self.seed)
@@ -135,6 +142,30 @@ class PrepareTest(unittest.TestCase):
         self.out = self.root / "out2"
         data = self.prepare(mergeable="UNKNOWN")
         self.assertIn("mergeability", data["warnings"][0])
+
+    def test_old_gh_warns_before_reviewers_make_screenshots(self):
+        self.env["FAKE_GH_VERSION"] = "2.99.0"
+        data = self.prepare()
+        self.assertIn("older than 2.103.0", data["warnings"][0])
+
+    def test_scan_lists_paths_and_tokens_in_reports_and_logs(self):
+        data = self.prepare()
+        reports = Path(data["reports"])
+        (reports / "bugs.md").write_text("clean line\n" + f"ran in {data['worktrees']['bugs']}\n")
+        (reports / "bugs" / "B1-run.log").write_text("token=ghp_" + "a" * 36 + "\n")
+        result = self.run_script("--scan", "--out", str(self.out))
+        self.assertEqual(result.returncode, 1)
+        hits = {(h["file"], h["line"]): h["kinds"] for h in json.loads(result.stdout)["hits"]}
+        self.assertEqual(set(hits), {("bugs.md", 2), ("bugs/B1-run.log", 1)})
+        self.assertIn("scratch folder", hits[("bugs.md", 2)])
+        self.assertEqual(hits[("bugs/B1-run.log", 1)], ["GitHub token"])
+
+    def test_scan_of_clean_reports_passes(self):
+        data = self.prepare()
+        (Path(data["reports"]) / "feature.md").write_text("Ran `npm test` in the repo root: 12 passed.\n")
+        result = self.run_script("--scan", "--out", str(self.out))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(json.loads(result.stdout)["hits"], [])
 
     def test_fork_push_target_needs_maintainer_edits(self):
         data = self.prepare(isCrossRepository=True, maintainerCanModify=True,

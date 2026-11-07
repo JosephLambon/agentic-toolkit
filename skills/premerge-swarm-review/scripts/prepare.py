@@ -3,6 +3,7 @@
 
 Usage:
   python3 prepare.py PR --out DIR [--repo OWNER/REPO]
+  python3 prepare.py --scan --out DIR
   python3 prepare.py --cleanup --out DIR
 
 PR is a number, URL or branch; prefer the URL (or pass --repo), because in a
@@ -10,8 +11,15 @@ fork's clone a bare number can resolve to the fork's own PR. Run it from a
 clone of the PR's base repo. Creates detached worktrees DIR/wt-feature,
 wt-bugs, wt-performance and wt-security at the PR head, DIR/wt-base at the
 merge base (so the performance baseline excludes the base branch's newer
-commits), DIR/reports/ and DIR/state.json. Prints one JSON object; act on
-its "warnings". Each DIR is single-use: a re-run needs a new one.
+commits), DIR/reports/<role>/ for each reviewer's proof files, and
+DIR/state.json. Prints one JSON object; act on its "warnings". "evidence" is
+the evidenced-pull-request skill folder, whose scripts reviewers use for
+screenshots and the orchestrator uses to post, or null when that skill or
+Node is missing. Each DIR is single-use: a re-run needs a new one.
+
+--scan lists lines in DIR/reports/*.md and DIR/reports/*/*.log that hold
+your home folder, username, DIR's path or token-like strings, and exits 1 if
+there are any. It can't see inside images.
 
 --cleanup can run from anywhere (it reads DIR/state.json). It stops every
 process whose working folder is inside DIR, then removes DIR's worktrees.
@@ -28,9 +36,11 @@ Gotchas:
   cleaned up.
 """
 import argparse
+import getpass
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -40,6 +50,14 @@ ROLES = ("feature", "bugs", "performance", "security")
 PR_FIELDS = ("number,url,title,author,state,isDraft,headRefName,headRefOid,baseRefName,"
              "mergeable,maintainerCanModify,isCrossRepository,"
              "headRepository,headRepositoryOwner")
+MIN_GH = (2, 103, 0)  # first gh whose --attach resolves --body-file paths from the file's folder
+TOKENS = {
+    "GitHub token": r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,})",
+    "API key": r"\bsk-[\w-]{20,}",
+    "AWS key": r"\bAKIA[0-9A-Z]{16}\b",
+    "Slack token": r"\bxox[abprs]-[\w-]{10,}",
+    "private key": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
+}
 URL_RE = re.compile(r"^(https?://([^/]+))/([^/]+)/([^/]+)/pull/\d+")
 
 
@@ -82,6 +100,16 @@ def fetch(remote, ref):
     return run(["git", "rev-parse", "FETCH_HEAD"])
 
 
+def evidence_tools():
+    if not shutil.which("node"):
+        return None
+    sibling = Path(__file__).resolve().parents[2] / "evidenced-pull-request"
+    for folder in (sibling, Path.home() / ".claude/skills/evidenced-pull-request"):
+        if all((folder / "scripts" / f).exists() for f in ("shoot.mjs", "attachments.mjs")):
+            return str(folder.resolve())
+    return None
+
+
 def push_target(info, base_url, remote):
     if not info["isCrossRepository"]:
         return {"remote": remote, "branch": info["headRefName"]}
@@ -121,6 +149,10 @@ def prepare(pr, out, repo=None):
     merge_base = run(["git", "merge-base", base_tip, head])
 
     warnings = []
+    gh_version = re.search(r"(\d+)\.(\d+)\.(\d+)", run(["gh", "--version"]))
+    if not gh_version or tuple(map(int, gh_version.groups())) < MIN_GH:
+        warnings.append("gh is older than 2.103.0, so screenshots can't be attached to the comments: "
+                        "ask the user to upgrade it (for example `brew upgrade gh`) before the reviewers start")
     if info["isCrossRepository"]:
         warnings.append(f"fork PR by {info['author']['login']}: reviewers will run its install "
                         "scripts, tests and code on this machine, with your credentials")
@@ -141,15 +173,34 @@ def prepare(pr, out, repo=None):
     for role, path in trees.items():
         run(["git", "worktree", "add", "--quiet", "--detach", str(path),
              merge_base if role == "base" else head])
-    (out / "reports").mkdir()
+    for role in ROLES:
+        (out / "reports" / role).mkdir(parents=True)
     return {
         "repo": f"{owner}/{name}", "number": info["number"], "url": info["url"],
         "title": info["title"], "author": info["author"]["login"], "visibility": visibility,
         "head": head, "base": info["baseRefName"], "baseTip": base_tip, "mergeBase": merge_base,
-        "push": push_target(info, base_url, remote),
+        "push": push_target(info, base_url, remote), "evidence": evidence_tools(),
         "worktrees": {role: str(path) for role, path in trees.items()},
         "reports": str(out / "reports"), "warnings": warnings,
     }
+
+
+def scan(out):
+    reports = Path(out).resolve() / "reports"
+    if not reports.is_dir():
+        raise Fail(f"No {reports}: nothing to scan.")
+    literals = {"home folder": re.escape(str(Path.home())), "scratch folder": re.escape(str(reports.parent))}
+    user = getpass.getuser()
+    if len(user) >= 3:
+        literals["username"] = rf"\b{re.escape(user)}\b"
+    patterns = {**literals, **TOKENS}
+    hits = []
+    for path in sorted([*reports.glob("*.md"), *reports.glob("*/*.log")]):
+        for number, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+            kinds = [kind for kind, pattern in patterns.items() if re.search(pattern, line)]
+            if kinds:
+                hits.append({"file": str(path.relative_to(reports)), "line": number, "kinds": kinds})
+    return {"hits": hits}
 
 
 def stop_processes(out):
@@ -202,18 +253,25 @@ def main(argv=None):
     parser.add_argument("pr", nargs="?", help="PR URL (preferred), number or branch")
     parser.add_argument("--out", required=True, help="new scratch folder outside the repo")
     parser.add_argument("--repo", help="OWNER/REPO, when PR is a number or branch")
+    parser.add_argument("--scan", action="store_true",
+                        help="list secrets and local paths in the reports before posting")
     parser.add_argument("--cleanup", action="store_true",
                         help="stop processes in and remove the worktrees under --out")
     args = parser.parse_args(argv)
-    if not args.cleanup and not args.pr:
-        parser.error("PR is required unless --cleanup is given")
+    if not (args.cleanup or args.scan or args.pr):
+        parser.error("PR is required unless --scan or --cleanup is given")
     try:
-        result = cleanup(args.out) if args.cleanup else prepare(args.pr, args.out, args.repo)
+        if args.cleanup:
+            result = cleanup(args.out)
+        elif args.scan:
+            result = scan(args.out)
+        else:
+            result = prepare(args.pr, args.out, args.repo)
     except Fail as err:
         print(f"prepare.py: {err}", file=sys.stderr)
         return err.code
     print(json.dumps(result, indent=1))
-    return 1 if result.get("failed") else 0
+    return 1 if result.get("failed") or result.get("hits") else 0
 
 
 if __name__ == "__main__":
