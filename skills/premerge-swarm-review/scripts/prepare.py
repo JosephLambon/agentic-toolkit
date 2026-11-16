@@ -104,7 +104,9 @@ def evidence_tools():
     if not shutil.which("node"):
         return None
     sibling = Path(__file__).resolve().parents[2] / "evidenced-pull-request"
-    for folder in (sibling, Path.home() / ".claude/skills/evidenced-pull-request"):
+    personal = [Path.home() / client / "skills" / "evidenced-pull-request"
+                for client in (".copilot", ".agents", ".claude")]
+    for folder in (sibling, *personal):
         if all((folder / "scripts" / f).exists() for f in ("shoot.mjs", "attachments.mjs")):
             return str(folder.resolve())
     return None

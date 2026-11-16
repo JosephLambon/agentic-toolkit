@@ -3,6 +3,7 @@
 They need Node.js on PATH. shoot.mjs is only tested where it needs no network
 or browser (argument errors and text-page rendering via --dry-run).
 """
+import os
 import shutil
 import struct
 import subprocess
@@ -168,7 +169,7 @@ class ImgDiffTest(unittest.TestCase):
 
     def test_tall_images_split_into_tiles(self):
         write_png(self.dir / "tall.png", gradient(4, 25))
-        script = (f"import {{ writeTiles }} from {str(SCRIPTS / 'png.mjs')!r};"
+        script = (f"import {{ writeTiles }} from {(SCRIPTS / 'png.mjs').as_uri()!r};"
                   f"console.log(writeTiles({str(self.dir / 'tall.png')!r}, {str(self.dir / 't')!r}, 10).length)")
         result = subprocess.run([NODE, "--input-type=module", "-e", script], capture_output=True, text=True)
         self.assertEqual(result.stdout.strip(), "3", result.stderr)
@@ -353,9 +354,23 @@ class ShootTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.dir = Path(tmp.name)
 
-    def run_shoot(self, *args):
+    def run_shoot(self, *args, env=None):
         return subprocess.run([NODE, str(SCRIPTS / "shoot.mjs"), *map(str, args)],
-                              capture_output=True, text=True, timeout=60)
+                              capture_output=True, text=True, timeout=60, env=env)
+
+    @unittest.skipUnless(os.name == "nt", "Windows npm launcher")
+    def test_windows_capture_reaches_npm_with_an_isolated_offline_cache(self):
+        log = self.dir / "run.log"
+        log.write_text("test output\n")
+        npm_config = self.dir / "empty.npmrc"
+        npm_config.write_text("")
+        env = {**os.environ, "PLAYWRIGHT_VERSION": "0.0.0-toolkit-offline-fixture",
+               "NPM_CONFIG_OFFLINE": "true", "NPM_CONFIG_CACHE": str(self.dir / "npm-cache"),
+               "NPM_CONFIG_USERCONFIG": str(npm_config)}
+        result = self.run_shoot(log, "--out", self.dir / "shots", env=env)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("ENOTCACHED", result.stderr)
+        self.assertNotIn("spawn npx ENOENT", result.stderr)
 
     def test_missing_out_is_an_error(self):
         result = self.run_shoot("https://example.com")

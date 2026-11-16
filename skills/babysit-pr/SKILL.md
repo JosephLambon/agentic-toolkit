@@ -11,22 +11,22 @@ description: Use to watch an open GitHub PR on a timer and deal with what review
 
 `<skill dir>` is the base directory shown when this skill loads, and `<script>` is `python3 <skill dir>/scripts/babysit.py`. `<pr>` is the PR's URL (`gh pr view <number> --json url --jq .url` turns a number into it). Pass the URL to every command, because given a bare number, gh guesses the repo from the git remotes.
 
-CronCreate, CronList, CronDelete and AskUserQuestion may be deferred tools. Load them with ToolSearch (`select:CronCreate,CronList,CronDelete,AskUserQuestion`) before deciding they're missing.
+Before starting or stopping a watch, read `references/clients.md` for this host's native scheduler, questions, subagents and permissions. Below, create/list/stop are scheduler operations, not shell commands. Discover deferred tools before deciding a capability is missing.
 
 ## Start
 
 1. Find the PR: the user's link or number, else the current branch's (`gh pr view --json url --jq .url`).
-2. Ask how often with AskUserQuestion, **every time, even if the user already said**: "Every 30 minutes" or "Every hour" (put the one they named first). The user wants to confirm before anything is set up. If they answer *Other*, do what it says (another interval, or cancel).
+2. Ask how often with the native question tool, **every time, even if the user already said**: "Every 30 minutes" or "Every hour" (put the one they named first). The user wants to confirm before anything is set up. If they answer *Other*, do what it says (another interval, or cancel).
 3. From a clone of the PR's repo, run `<script> start <pr> --worktree <scratchpad>/babysit-pr-<number>`, leaving out `--worktree` if the session has no scratchpad directory. It checks the PR is open, works out where fixes can be pushed, and makes a worktree for fixes, so the user's checkout is never touched. The scratchpad lets the fixer edit files there without permission prompts. If `warnings` isn't empty, show them and ask before continuing.
-4. If CronList already has a job whose prompt starts `babysit-pr tick for <pr>`, ask whether to replace it; two jobs on one PR double every reply. Then CronCreate, recurring: pick a minute M from 1–29, and use `M,M+30 * * * *` for 30 minutes or `M * * * *` for hourly, with the tick prompt below filled in.
-5. Tell the user the next run time (from CronCreate's result), that ticks run only while this session is open and idle, that the job expires after 7 days, and how to stop it. If this session asks permission before Bash commands, every tick and fix waits for their approval: offer to allow `Bash(python3 <skill dir>/scripts/babysit.py:*)` with the update-config skill. Then run the first tick now.
+4. List schedules. If a job's prompt starts `babysit-pr tick for <pr>`, ask whether to replace it; two jobs on one PR double every reply. Create one recurring schedule at the confirmed interval with the tick prompt below filled in. Keep its returned ID for stopping it.
+5. Tell the user the confirmed interval, next run time if returned, the host's session/expiry limits and how to stop it. Explain any permission prompts that can block ticks; use only the host's scoped permission controls, not another client's configuration. Then run the first tick now.
 
 ### Tick prompt
 
 ```
 babysit-pr tick for <pr>. <script> is python3 <skill dir>/scripts/babysit.py.
 1. Run `<script> list <pr>`. If it fails, tell the user the error; if the previous tick failed the same way, say only "still failing".
-2. If `state` isn't OPEN: CronDelete this job (CronList finds it), run `<script> stop <pr>`, and tell the user babysitting ended and why, passing on anything `stop` refused to remove. Done.
+2. If `state` isn't OPEN: stop this schedule (list schedules to find its ID), run `<script> stop <pr>`, and tell the user babysitting ended and why, passing on anything `stop` refused to remove. Done.
 3. If `busy` is true, the last fixer is still working. Skip this tick.
 4. If `blocked` is set, say "PR #<number> blocked: <blocked>" unless the previous tick already said it. Done.
 5. If `items` is empty: say "PR #<number>: nothing new" in one line, plus any failing_checks. Done.
@@ -36,13 +36,13 @@ babysit-pr tick for <pr>. <script> is python3 <skill dir>/scripts/babysit.py.
 
 ## Stop
 
-When the user asks, or the PR is merged or closed: CronDelete the job (CronList finds it), then `<script> stop <pr>`. That removes the worktree, but refuses while a fixer is working or the worktree holds unpushed work: tell the user what it lists, and add `--force` only once they agree. The record of handled items stays in `~/.cache/babysit-pr/`, so babysitting the PR again later doesn't redo them.
+When the user asks, or the PR is merged or closed: stop the schedule (list schedules to find its ID), then `<script> stop <pr>`. That removes the worktree, but refuses while a fixer is working or the worktree holds unpushed work: tell the user what it lists, and add `--force` only once they agree. The record of handled items stays in `~/.cache/babysit-pr/`, so babysitting the PR again later doesn't redo them.
 
 ## When it can't finish cleanly
 
 - **gh missing or signed out:** ask the user to install it (`brew install gh` on macOS) or run `! gh auth login`.
 - **`start` fails:** its message says why (PR not open, not a clone of that repo, worktree path taken) and what to do.
-- **No CronCreate even after ToolSearch** (outside Claude Code): say timed checks need Claude Code, and offer to run one tick now.
+- **No native scheduler after discovery:** explain that timed checks are unavailable in this session and offer one tick now. Never invent tools or silently set up an OS/cloud job.
 - **Blocked** (uncommitted changes in the worktree, a rebase conflict, a refused push): the script records it, and ticks stop sending fixers until the PR head changes. Once the user has fixed the cause, re-run `<script> start <pr> --worktree <same path>`, which clears it.
 
 ## Gotchas
