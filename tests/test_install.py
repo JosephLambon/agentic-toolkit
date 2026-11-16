@@ -22,7 +22,8 @@ class InstallerTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # Resolve so symlinked temp roots (macOS /var -> /private/var) compare equal.
+        self.root = Path(temporary.name).resolve()
 
     def directories(self, installer):
         root = self.root / installer
