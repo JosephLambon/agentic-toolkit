@@ -1,6 +1,6 @@
 ---
 name: enhanced-skill-creator
-description: Use to create, improve or review any Claude skill or SKILL.md, for example "make a skill for…", "turn this into a skill", "improve this skill" or "review this skill against best practices". Prefer it over plain skill-creator for these, since it wraps skill-creator and adds an adversarial review. Not for evals, benchmarks or description tuning alone (use skill-creator), plugins or hooks, or running an existing skill.
+description: Use to create, improve or review any agent skill or SKILL.md, for example "make a skill for…", "turn this into a skill", "improve this skill" or "review this skill against best practices". Prefer it over plain skill-creator for these, since it wraps skill-creator and adds an adversarial review. Not for evals, benchmarks or description tuning alone (use skill-creator), plugins or hooks, or running an existing skill.
 ---
 
 # Enhanced skill creator
@@ -10,7 +10,9 @@ description: Use to create, improve or review any Claude skill or SKILL.md, for 
 **Placeholders:**
 - `<this skill>` is this skill's folder.
 - `<target>` is the skill being built.
-- `<skill-creator dir>` is the base directory shown when skill-creator loads. If it hasn't loaded, run `find -L ~/.claude/skills -path '*skill-creator/scripts/quick_validate.py'`.
+- `<skill-creator dir>` is the base directory reported when the installed skill-creator loads. Invoke it with the host's skill tool; do not assume it lives in `~/.claude/skills` (Copilot uses different personal/plugin directories).
+
+Use native subagents: `task` with `agent_type: "general-purpose"` in Copilot CLI, Agent/Task in Claude Code. Use the exposed shell and its path syntax; `python` can replace `python3` when needed.
 
 ## Workflow
 

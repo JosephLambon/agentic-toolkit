@@ -23,6 +23,9 @@ import { pathToFileURL } from 'node:url';
 import { writeTiles } from './png.mjs';
 
 const VERSION = process.env.PLAYWRIGHT_VERSION || '1.64.1';
+const NPX = process.platform === 'win32'
+  ? [process.execPath, path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js')]
+  : ['npx'];
 const MAX_IMAGE = 10 * 1024 * 1024;
 const TILE_OVER = 2000; // agents' image viewers shrink taller images until detail is unreadable
 const TEXT_EXT = new Set(['.txt', '.log', '.out']);
@@ -105,7 +108,7 @@ function args(shot, channel) {
 
 function run(a) {
   return new Promise((resolve) => {
-    const child = spawn('npx', a, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(NPX[0], [...NPX.slice(1), ...a], { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (out += d));

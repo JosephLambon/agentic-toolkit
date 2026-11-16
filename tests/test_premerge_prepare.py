@@ -15,6 +15,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "skills/premerge-swarm-review/scripts/prepare.py"
 _spec = importlib.util.spec_from_file_location("prepare", SCRIPT)
@@ -44,6 +45,26 @@ GIT_ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.
 def git(*args, cwd):
     return subprocess.run(["git", *args], cwd=cwd, env=GIT_ENV, check=True,
                           capture_output=True, text=True).stdout.strip()
+
+
+class EvidenceToolsTest(unittest.TestCase):
+    def test_finds_evidence_in_each_clients_personal_skill_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            script = home / "isolated/skills/premerge-swarm-review/scripts/prepare.py"
+            for directory in (".copilot", ".agents", ".claude"):
+                with self.subTest(directory=directory):
+                    folder = home / directory / "skills/evidenced-pull-request"
+                    (folder / "scripts").mkdir(parents=True)
+                    for filename in ("shoot.mjs", "attachments.mjs"):
+                        (folder / "scripts" / filename).write_text("")
+                    with mock.patch.object(Path, "home", return_value=home), \
+                            mock.patch.object(prepare_mod, "__file__", str(script)), \
+                            mock.patch.object(prepare_mod.shutil, "which", return_value="node"):
+                        self.assertEqual(prepare_mod.evidence_tools(), str(folder.resolve()))
+                        with mock.patch.object(prepare_mod.shutil, "which", return_value=None):
+                            self.assertIsNone(prepare_mod.evidence_tools())
+                    shutil.rmtree(folder)
 
 
 class PrepareTest(unittest.TestCase):
