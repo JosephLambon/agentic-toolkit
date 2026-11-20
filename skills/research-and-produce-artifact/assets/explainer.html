@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{{TITLE}}</title>
+  <style>
+    :root {
+      --paper: #fcfcfa;
+      --ink: #20231f;
+      --muted: #5e635b;
+      --rule: #dedfd9;
+      --track: #f1f2ee;
+      --tab-hover: #e5e7e0;
+      --tab-border: #cdd1c6;
+      --focus: #155fc0;
+      --space-1: 8px;
+      --space-2: 16px;
+      --space-3: 24px;
+      --space-4: 40px;
+      --space-5: 56px;
+      font-family: "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      font-synthesis: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; font-size: 18px; line-height: 1.65; }
+    main { max-width: 972px; margin-inline: auto; padding: var(--space-5) 36px 72px; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2 { text-wrap: balance; overflow-wrap: anywhere; }
+    h1 { max-width: 24ch; font-size: clamp(2rem, 3.8vw, 3rem); line-height: 1.12; letter-spacing: -.035em; font-weight: 600; }
+    .answer { max-width: 62ch; margin-top: var(--space-2); color: var(--muted); font-size: 20px; line-height: 1.5; text-wrap: pretty; }
+    header { margin-bottom: var(--space-4); }
+    .topic-nav { display: flex; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--track); scrollbar-width: thin; }
+    .topic-nav button { flex: 0 0 auto; min-height: 44px; padding: 8px 18px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .topic-nav button[aria-selected="true"] { border-color: var(--tab-border); background: white; color: var(--ink); }
+    .topic-nav button:hover:not([aria-selected="true"]) { background: var(--tab-hover); color: var(--ink); }
+    :focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+    .topic-nav button:focus-visible { outline-offset: -4px; }
+    .topic { max-width: 66ch; padding-top: var(--space-4); }
+    .topic + .topic { margin-top: var(--space-5); border-top: 1px solid var(--rule); }
+    .enhanced .topic { margin-top: 0; border-top: 0; }
+    h2 { margin-bottom: var(--space-3); font-size: clamp(1.5rem, 2.4vw, 1.875rem); line-height: 1.25; letter-spacing: -.025em; font-weight: 600; }
+    .finding { font-size: 21px; line-height: 1.5; letter-spacing: -.01em; }
+    .explanation + .explanation { margin-top: 32px; }
+    .explanation h3 { display: flex; align-items: center; gap: 12px; margin-bottom: var(--space-1); font-size: 16px; line-height: 1.4; font-weight: 700; letter-spacing: .04em; }
+    .explanation h3::after { content: ""; width: 28px; height: 2px; background: var(--rule); }
+    .topic p + p { margin-top: var(--space-2); }
+    .evidence { color: var(--muted); font-size: 17px; }
+    p { overflow-wrap: anywhere; text-wrap: pretty; }
+    a { color: inherit; text-decoration-color: #8a8f83; text-underline-offset: .2em; overflow-wrap: anywhere; }
+    a:hover { text-decoration-color: currentColor; }
+    code { font-family: Consolas, "SFMono-Regular", monospace; font-size: max(.9em, 16px); overflow-wrap: anywhere; }
+    .next-step { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--rule); }
+    .next-step h3 { margin-bottom: var(--space-1); font-size: 17px; font-weight: 600; }
+    .next-step p { font-size: 17px; }
+    .sources { margin-top: var(--space-3); font-size: 16px; color: var(--muted); }
+    .sources summary { width: fit-content; min-height: 44px; padding-block: 8px; cursor: pointer; }
+    .source-list { display: grid; gap: var(--space-2); margin: var(--space-1) 0 0; padding-left: 22px; }
+    .source-list a { font-weight: 500; }
+    .source-location { display: block; overflow-wrap: anywhere; }
+
+    @media (max-width: 600px) {
+      body { font-size: 17px; }
+      main { padding: 32px 22px 48px; }
+      header { margin-bottom: 28px; }
+      .answer { font-size: 18px; }
+      .topic-nav button { padding-inline: 14px; }
+      .topic { padding-top: 28px; }
+      .topic + .topic { margin-top: 32px; }
+      .enhanced .topic { margin-top: 0; }
+      h2 { margin-bottom: 20px; }
+      .finding { font-size: 20px; }
+    }
+
+    @media print {
+      :root { background: white; }
+      body { font-size: 11pt; }
+      main { max-width: none; padding: 0; }
+      header { margin-bottom: 24px; }
+      h1 { font-size: 26pt; }
+      .answer, .finding { font-size: 12pt; }
+      .evidence, .next-step p, .next-step h3, .sources { font-size: 11pt; }
+      .topic-nav { display: none !important; }
+      .topic, .topic[hidden] { display: block !important; max-width: none; break-before: page; margin-top: 0; padding-top: 0; border: 0; }
+      .topic:first-of-type { break-before: auto; }
+      h2 { font-size: 18pt; break-after: avoid; }
+      .explanation h3 { font-size: 11pt; break-after: avoid; }
+      p, .next-step, .source-list li { break-inside: avoid; }
+      .sources summary { min-height: 0; padding: 0; cursor: default; }
+      .sources::details-content { content-visibility: visible; }
+      .sources > :not(summary) { display: block !important; }
+      code { font-size: .9em; }
+      :focus-visible { outline: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>{{TITLE}}</h1>
+      <p class="answer">{{BOTTOM_LINE}}</p>
+    </header>
+
+    <nav class="topic-nav" aria-label="Topics" hidden>
+      <button type="button" id="tab-1" data-panel="topic-1">{{TOPIC_1}}</button>
+      <button type="button" id="tab-2" data-panel="topic-2">{{TOPIC_2}}</button>
+    </nav>
+
+    <section class="topic" id="topic-1">
+      <h2>{{HEADING_1}}</h2>
+      <div class="explanation">
+        <h3>WHAT</h3>
+        <p class="finding">{{WHAT_1}}</p>
+      </div>
+      <div class="explanation">
+        <h3>WHY</h3>
+        <p>{{WHY_1}}</p>
+      </div>
+      <div class="explanation">
+        <h3>PROOF</h3>
+        <p class="evidence">{{PROOF_1}}</p>
+      </div>
+      <aside class="next-step" aria-labelledby="action-1">
+        <h3 id="action-1">{{ACTION_LABEL_1}}</h3>
+        <p>{{ACTION_1}}</p>
+      </aside>
+      <details class="sources" open>
+        <summary>Sources</summary>
+        <ol class="source-list">
+          <li id="source-1">
+            <a href="{{SOURCE_1_URL}}">{{SOURCE_1_LABEL}}</a>
+            <span class="source-location">{{SOURCE_1_LOCATOR}}</span>
+          </li>
+        </ol>
+      </details>
+    </section>
+
+    <section class="topic" id="topic-2">
+      <h2>{{HEADING_2}}</h2>
+      <div class="explanation">
+        <h3>WHAT</h3>
+        <p class="finding">{{WHAT_2}}</p>
+      </div>
+      <div class="explanation">
+        <h3>WHY</h3>
+        <p>{{WHY_2}}</p>
+      </div>
+      <div class="explanation">
+        <h3>PROOF</h3>
+        <p class="evidence">{{PROOF_2}}</p>
+      </div>
+      <aside class="next-step" aria-labelledby="action-2">
+        <h3 id="action-2">{{ACTION_LABEL_2}}</h3>
+        <p>{{ACTION_2}}</p>
+      </aside>
+      <details class="sources" open>
+        <summary>Sources</summary>
+        <ol class="source-list">
+          <li id="source-2">
+            <a href="{{SOURCE_2_URL}}">{{SOURCE_2_LABEL}}</a>
+            <span class="source-location">{{SOURCE_2_LOCATOR}}</span>
+          </li>
+        </ol>
+      </details>
+    </section>
+  </main>
+  <script>
+    const disclosures = Array.from(document.querySelectorAll(".sources"));
+    disclosures.forEach(disclosure => { disclosure.open = false; });
+    let beforePrint;
+    window.addEventListener("beforeprint", () => {
+      beforePrint = disclosures.map(disclosure => disclosure.open);
+      disclosures.forEach(disclosure => { disclosure.open = true; });
+    });
+    window.addEventListener("afterprint", () => {
+      if (beforePrint) disclosures.forEach((disclosure, index) => {
+        disclosure.open = beforePrint[index];
+      });
+    });
+
+    const navigation = document.querySelector(".topic-nav");
+    const tabs = navigation ? Array.from(navigation.querySelectorAll("button")) : [];
+    const panels = tabs.map(tab => document.getElementById(tab.dataset.panel));
+    const validTabs = tabs.length > 1 && panels.every(Boolean)
+      && new Set(panels).size === tabs.length
+      && panels.length === document.querySelectorAll(".topic").length;
+
+    function activate(index, moveFocus = false) {
+      tabs.forEach((tab, current) => {
+        const selected = current === index;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        panels[current].hidden = !selected;
+      });
+      if (moveFocus) tabs[index].focus({ preventScroll: true });
+      tabs[index].scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+    }
+
+    function followHash() {
+      let fragment;
+      try { fragment = decodeURIComponent(location.hash.slice(1)); }
+      catch { return; }
+      const target = document.getElementById(fragment);
+      if (!target) return;
+      if (validTabs) {
+        const index = panels.findIndex(panel => panel === target || panel.contains(target));
+        if (index >= 0) activate(index);
+      }
+      const disclosure = target.closest("details");
+      if (disclosure) disclosure.open = true;
+      target.scrollIntoView({ block: "nearest", behavior: "instant" });
+    }
+
+    if (validTabs) {
+      navigation.setAttribute("role", "tablist");
+      document.documentElement.classList.add("enhanced");
+      tabs.forEach((tab, index) => {
+        tab.setAttribute("role", "tab");
+        tab.setAttribute("aria-controls", panels[index].id);
+        panels[index].setAttribute("role", "tabpanel");
+        panels[index].setAttribute("aria-labelledby", tab.id);
+        panels[index].tabIndex = 0;
+        function choose(next, moveFocus = false) {
+          if (location.hash) history.replaceState(null, "", location.href.split("#")[0]);
+          activate(next, moveFocus);
+        }
+        tab.addEventListener("click", () => choose(index));
+        tab.addEventListener("keydown", event => {
+          let next;
+          if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+          else if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
+          else if (event.key === "Home") next = 0;
+          else if (event.key === "End") next = tabs.length - 1;
+          else return;
+          event.preventDefault();
+          choose(next, true);
+        });
+      });
+      activate(0);
+      navigation.hidden = false;
+    }
+    followHash();
+    window.addEventListener("hashchange", followHash);
+  </script>
+</body>
+</html>
