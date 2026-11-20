@@ -78,6 +78,19 @@ class InstallerTests(unittest.TestCase):
                     self.assert_installed(target)
                 self.assertEqual(second.stdout.count("already linked"), 2 * len(SKILLS))
 
+    def test_artifact_template_is_available_through_both_client_installations(self):
+        skill = "research-and-produce-artifact"
+        template = ROOT / "skills" / skill / "assets" / "explainer.html"
+        self.assertTrue(template.is_file(), "The artifact skill must bundle its HTML template")
+        for installer in INSTALLERS:
+            with self.subTest(installer=installer):
+                result = self.run_installer(installer, "both")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for target in self.directories(installer):
+                    installed = target / skill / "assets" / "explainer.html"
+                    self.assertEqual(installed.resolve(), template.resolve())
+                    self.assertEqual(installed.read_bytes(), template.read_bytes())
+
     def test_existing_skill_directory_is_preserved(self):
         for installer in INSTALLERS:
             with self.subTest(installer=installer):
