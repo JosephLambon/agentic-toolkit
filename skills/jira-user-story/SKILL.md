@@ -17,6 +17,8 @@ Write for a developer opening the ticket cold. Explain why the work matters, whe
 
 **Title:** Name the affected component and desired outcome.
 
+Keep the four headings exactly as shown, including the target emoji. Put each bold label and its text in a separate paragraph, separated by a blank line.
+
 ```markdown
 # User Story
 
