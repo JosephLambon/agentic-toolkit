@@ -44,6 +44,7 @@ If a skipped entry is an older standalone copy, compare and back it up before ma
 | [`premerge-swarm-review`](skills/premerge-swarm-review/SKILL.md) | Four independent runtime reviewers: feature, bugs and performance together, then security using their public reports and private handoffs as leads. Comments default to **80-150 words without findings, 200-400 with findings**. Public evidence proves findings only; investigation and passing checks stay private. Fixes require your choice; it never merges. Python prepares isolated worktrees and finds evidence tools in either client's installation. |
 | [`babysit-pr`](skills/babysit-pr/SKILL.md) | Watches bot feedback on an open PR at a confirmed interval, using the current client's native session scheduler. A fresh agent judges feedback and fixes agreed points in an isolated worktree; human comments and design choices remain yours. Requires native scheduling and subagents, with an explicit one-tick fallback when unavailable. Never merges or force-pushes. |
 | [`research-and-produce-artifact`](skills/research-and-produce-artifact/SKILL.md) | Researches a question and produces a concise, offline HTML explainer with visible **WHAT**, **WHY** and **PROOF** in every topic. Bundles an accessible template with keyboard tabs, source disclosures, print and no-JavaScript fallbacks. Uses either client's native tools; no required plugin, package or browser installation. |
+| [`jira-user-story`](skills/jira-user-story/SKILL.md) | Drafts or publishes concise Jira stories with When / I want / So that, linked code and integration locations, and Given / When / Then scenarios. Uploads and verifies evidence when supported or lists pending files. Python checks the hard word limits. |
 
 In either client, invoke `/research-and-produce-artifact <question and intended reader>`. Install the whole skill directory, including `assets/`; the installers above link both clients to that same directory.
 
@@ -67,7 +68,7 @@ python3 -m unittest discover -s tests
 On native Windows, the inherited GitHub CLI fixture tests' extensionless fake `gh` scripts are not executable: they can fall through to the real authenticated CLI. Do not use that full-suite command there. Run the native installer, evidence-discovery, image and capture-planning regressions instead:
 
 ```powershell
-python -m unittest discover -s tests -k Installer -k EvidenceTools -k ImgDiffTest -k ShootTest -k MeasureTest
+python -m unittest discover -s tests -k Installer -k EvidenceTools -k ImgDiffTest -k ShootTest -k MeasureTest -k JiraStoryWordsTest
 ```
 
 Installer tests use isolated temporary destinations, never your global skill folders. No model-based skill evaluations are run by these deterministic tests.
